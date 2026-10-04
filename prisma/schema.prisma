@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────
+
+enum ContactStatus {
+  not_contacted
+  queued
+  sent
+  delivered
+  read
+  failed
+}
+
+enum CandidateSource {
+  manual
+  csv
+  gupy_api
+  gupy_webhook
+}
+
+// ──────────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────────
+
+model Vaga {
+  id         String      @id @default(cuid())
+  title      String
+  location   String
+  openings   Int
+  gupyJobId  String?     @unique
+  nomeCurto  String?
+  unidade    String?
+  candidates Candidate[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Candidate {
+  id                 String          @id @default(cuid())
+  vagaId             String
+  vaga               Vaga            @relation(fields: [vagaId], references: [id])
+  gupyApplicationId  String?         @unique
+  source             CandidateSource @default(manual)
+  name               String
+  phone              String?
+  hasPhone           Boolean         @default(true)
+  city               String?
+  stage              String          @default("Triagem")
+  contactStatus      ContactStatus   @default(not_contacted)
+  lastError          String?
+  messageId          String?
+  statusAt           DateTime?
+  gupyUpdatedAt      DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  messageRecords     MessageRecord[]
+}
+
+model MessageRecord {
+  id          String        @id @default(cuid())
+  messageId   String        @unique
+  candidateId String
+  candidate   Candidate     @relation(fields: [candidateId], references: [id])
+  status      ContactStatus @default(sent)
+  sentAt      DateTime      @default(now())
+}
+
+model TemplateMapping {
+  id           String   @id @default(cuid())
+  templateName String
+  language     String
+  mapping      Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([templateName, language])
+}
+
+model GupyEvent {
+  id            String   @id
+  action        String
+  eventDate     DateTime
+  applicationId String?
+  payload       Json
+  receivedAt    DateTime @default(now())
+
+  @@index([applicationId])
+}

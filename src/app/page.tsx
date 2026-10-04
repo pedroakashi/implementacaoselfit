@@ -3,11 +3,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import type { Vaga, Candidate } from '@/lib/store'
+import type { Mapping } from '@/lib/templates'
 import TestModeBanner from '@/components/TestModeBanner'
 import Sidebar from '@/components/Sidebar'
 import CandidateList from '@/components/CandidateList'
 import WhatsAppPanel from '@/components/WhatsAppPanel'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 
 interface AppConfig {
   isTestMode: boolean
@@ -21,22 +23,77 @@ interface DispatchResult {
   results: Array<{ candidateId: string; candidateName: string; messageId: string; status: string }>
 }
 
+// ── Inline editable field ────────────────────────────────────────────────────
+function InlineField({
+  label,
+  value,
+  placeholder,
+  onSave,
+}: {
+  label: string
+  value: string | null | undefined
+  placeholder: string
+  onSave: (v: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState('')
+
+  const start = () => { setDraft(value ?? ''); setEditing(true) }
+  const save  = () => { setEditing(false); onSave(draft.trim()) }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[12px]">
+      <span className="text-muted-foreground">{label}:</span>
+      {editing ? (
+        <Input
+          autoFocus
+          className="h-5 w-32 px-1 text-[12px] rounded"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter')  save()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+        />
+      ) : (
+        <button
+          onClick={start}
+          className={
+            value
+              ? 'font-medium text-foreground hover:underline'
+              : 'text-muted-foreground/60 italic hover:text-foreground'
+          }
+        >
+          {value || placeholder}
+        </button>
+      )}
+    </span>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [config, setConfig] = useState<AppConfig>({ isTestMode: false, testPhone: null })
-  const [vagas, setVagas] = useState<Vaga[]>([])
+  const [config, setConfig]         = useState<AppConfig>({ isTestMode: false, testPhone: null })
+  const [vagas, setVagas]           = useState<Vaga[]>([])
   const [selectedVagaId, setSelectedVagaId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [filters, setFilters] = useState({ name: '', stage: '', city: '' })
+  const [filters, setFilters]       = useState({ name: '', stage: '', city: '' })
   const [dispatching, setDispatching] = useState(false)
+
+  const fetchVagas = useCallback(async () => {
+    const data: Vaga[] = await fetch('/api/vagas').then((r) => r.json())
+    setVagas(data)
+    return data
+  }, [])
 
   useEffect(() => {
     fetch('/api/config').then((r) => r.json()).then(setConfig)
-    fetch('/api/vagas').then((r) => r.json()).then((data: Vaga[]) => {
-      setVagas(data)
+    fetchVagas().then((data) => {
       if (data.length) setSelectedVagaId(data[0].id)
     })
-  }, [])
+  }, [fetchVagas])
 
   const fetchCandidates = useCallback(async (vagaId: string) => {
     const params = new URLSearchParams({ vagaId })
@@ -81,14 +138,19 @@ export default function Home() {
     })
   }
 
-  const handleDispatch = async (templateName: string) => {
+  const handleDispatch = async (opts: {
+    templateName: string
+    language: string
+    mapping: Mapping
+    fillValues?: Record<string, string>
+  }) => {
     if (!selectedIds.size) return
     setDispatching(true)
     try {
       const res = await fetch('/api/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateIds: Array.from(selectedIds), templateName }),
+        body: JSON.stringify({ candidateIds: Array.from(selectedIds), ...opts }),
       })
       const data: DispatchResult & { error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro desconhecido')
@@ -108,28 +170,64 @@ export default function Home() {
     }
   }
 
+  const handleVagaFieldSave = async (field: 'nomeCurto' | 'unidade', value: string) => {
+    if (!selectedVagaId) return
+    try {
+      const res = await fetch(`/api/vagas/${selectedVagaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!res.ok) { toast.error('Erro ao salvar'); return }
+      const updated: Vaga = await res.json()
+      setVagas((prev) => prev.map((v) => (v.id === updated.id ? { ...v, ...updated } : v)))
+    } catch {
+      toast.error('Erro ao salvar')
+    }
+  }
+
   const selectedCandidates = candidates.filter((c) => selectedIds.has(c.id))
-  const selectedVaga = vagas.find((v) => v.id === selectedVagaId)
+  const selectedVaga = vagas.find((v) => v.id === selectedVagaId) ?? null
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <TestModeBanner testPhone={config.testPhone} />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar vagas={vagas} selectedId={selectedVagaId} onSelect={setSelectedVagaId} />
+        <Sidebar
+          vagas={vagas}
+          selectedId={selectedVagaId}
+          onSelect={setSelectedVagaId}
+          onRefreshVagas={fetchVagas}
+          onSelectVaga={setSelectedVagaId}
+        />
 
         <main className="flex flex-1 flex-col overflow-hidden bg-background">
           {selectedVaga ? (
             <>
               {/* Content header */}
               <div className="flex shrink-0 items-center justify-between border-b border-border bg-white px-6 py-4">
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-1">
                   <h1 className="text-[17px] font-bold tracking-tight text-foreground">
                     {selectedVaga.title}
                   </h1>
                   <p className="text-[13px] text-muted-foreground">
                     {selectedVaga.location} · {selectedVaga.openings} vaga{selectedVaga.openings !== 1 ? 's' : ''} · {candidates.length} candidato{candidates.length !== 1 ? 's' : ''}
                   </p>
+                  <div className="flex flex-wrap gap-3 mt-0.5">
+                    <InlineField
+                      label="Cargo curto"
+                      value={selectedVaga.nomeCurto}
+                      placeholder="clique para definir"
+                      onSave={(v) => handleVagaFieldSave('nomeCurto', v)}
+                    />
+                    <InlineField
+                      label="Unidade"
+                      value={selectedVaga.unidade}
+                      placeholder="clique para definir"
+                      onSave={(v) => handleVagaFieldSave('unidade', v)}
+                    />
+                  </div>
                 </div>
                 {selectedIds.size > 0 && (
                   <Badge variant="default" className="rounded-full px-3 py-1 text-xs font-semibold">
@@ -149,8 +247,8 @@ export default function Home() {
                   onToggleAll={handleToggleAll}
                 />
                 <WhatsAppPanel
-                  selectedCount={selectedIds.size}
-                  selectedNames={selectedCandidates.map((c) => c.name)}
+                  selectedCandidates={selectedCandidates}
+                  selectedVaga={selectedVaga}
                   onDispatch={handleDispatch}
                   dispatching={dispatching}
                 />

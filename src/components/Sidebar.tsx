@@ -1,12 +1,18 @@
 'use client'
 
+import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Vaga } from '@/lib/store'
+import GupyImportModal from '@/components/GupyImportModal'
+import { resyncVagaAction } from '@/actions/gupy'
 
 interface Props {
   vagas: Vaga[]
   selectedId: string | null
   onSelect: (id: string) => void
+  onRefreshVagas: () => void
+  onSelectVaga: (id: string) => void
 }
 
 function SelfitLogo({ className }: { className?: string }) {
@@ -37,7 +43,31 @@ function SelfitLogo({ className }: { className?: string }) {
   )
 }
 
-export default function Sidebar({ vagas, selectedId, onSelect }: Props) {
+export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, onSelectVaga }: Props) {
+  const [modalOpen, setModalOpen] = useState(false)
+  const [resyncingId, setResyncingId] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  function handleResync(e: React.MouseEvent, vaga: Vaga & { gupyJobId?: string | null }) {
+    e.stopPropagation()
+    if (!vaga.gupyJobId) return
+    setResyncingId(vaga.id)
+    startTransition(async () => {
+      try {
+        const result = await resyncVagaAction(vaga.gupyJobId!)
+        const parts = [`${result.importados} novos`, `${result.atualizados} atualizados`]
+        if (result.semTelefone)        parts.push(`${result.semTelefone} sem telefone`)
+        if (result.ignoradosPorStatus) parts.push(`${result.ignoradosPorStatus} ignorados por status`)
+        toast.success(`"${vaga.title}" sincronizada — ${parts.join(', ')}`)
+        onRefreshVagas()
+      } catch (err) {
+        toast.error(`Erro ao sincronizar: ${err instanceof Error ? err.message : String(err)}`)
+      } finally {
+        setResyncingId(null)
+      }
+    })
+  }
+
   return (
     <aside className="flex flex-col w-64 flex-shrink-0 overflow-y-auto bg-sidebar border-r border-sidebar-border">
       {/* Header */}
@@ -55,27 +85,59 @@ export default function Sidebar({ vagas, selectedId, onSelect }: Props) {
 
       {/* Nav */}
       <div className="flex-1 px-3 py-4">
-        <span className="block px-1 mb-2 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/30">
-          Vagas abertas
-        </span>
+        <div className="flex items-center justify-between px-1 mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/30">
+            Vagas abertas
+          </span>
+        </div>
+
+        {/* Import button */}
+        <button
+          onClick={() => setModalOpen(true)}
+          className="flex w-full items-center gap-1.5 rounded-md border border-dashed border-sidebar-foreground/20 px-3 py-2 mb-3 text-[12px] text-sidebar-foreground/40 hover:border-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors"
+        >
+          <span className="text-base leading-none">+</span>
+          Importar vaga da Gupy
+        </button>
+
         <nav className="flex flex-col gap-0.5">
-          {vagas.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => onSelect(v.id)}
-              className={cn(
-                'flex flex-col w-full text-left px-3 py-2.5 rounded-md transition-colors duration-100 relative',
-                selectedId === v.id
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-[60%] before:bg-primary before:rounded-r'
-                  : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
-              )}
-            >
-              <span className="text-[13px] font-medium leading-tight">{v.title}</span>
-              <span className="text-[11px] mt-0.5 opacity-50">
-                {v.location} · {v.openings} vaga{v.openings !== 1 ? 's' : ''}
-              </span>
-            </button>
-          ))}
+          {vagas.map((v) => {
+            const vagaWithGupy = v as Vaga & { gupyJobId?: string | null }
+            const isSyncing = resyncingId === v.id
+            return (
+              <button
+                key={v.id}
+                onClick={() => onSelect(v.id)}
+                className={cn(
+                  'group flex flex-col w-full text-left px-3 py-2.5 rounded-md transition-colors duration-100 relative',
+                  selectedId === v.id
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-[60%] before:bg-primary before:rounded-r'
+                    : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
+                )}
+              >
+                <div className="flex items-center justify-between gap-1 min-w-0">
+                  <span className="truncate text-[13px] font-medium leading-tight">{v.title}</span>
+                  {vagaWithGupy.gupyJobId && (
+                    <span
+                      role="button"
+                      onClick={(e) => handleResync(e, vagaWithGupy)}
+                      className={cn(
+                        'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                        isSyncing || isPending
+                          ? 'text-sidebar-foreground/30 cursor-default'
+                          : 'text-sidebar-foreground/30 hover:text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 cursor-pointer opacity-0 group-hover:opacity-100'
+                      )}
+                    >
+                      {isSyncing ? '...' : '↻'}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] mt-0.5 opacity-50">
+                  {v.location} · {v.openings} vaga{v.openings !== 1 ? 's' : ''}
+                </span>
+              </button>
+            )
+          })}
         </nav>
       </div>
 
@@ -83,6 +145,15 @@ export default function Sidebar({ vagas, selectedId, onSelect }: Props) {
       <div className="px-4 py-3 border-t border-sidebar-border">
         <p className="text-[11px] text-sidebar-foreground/20">Convoca v1.0 · Selfit</p>
       </div>
+
+      <GupyImportModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onImported={(vagaId) => {
+          onRefreshVagas()
+          onSelectVaga(vagaId)
+        }}
+      />
     </aside>
   )
 }

@@ -48,7 +48,8 @@ export default function CandidateList({
     [candidates]
   )
   const cities = useMemo(
-    () => Array.from(new Set(candidates.map((c) => c.city))).sort(),
+    () =>
+      Array.from(new Set(candidates.map((c) => c.city).filter(Boolean) as string[])).sort(),
     [candidates]
   )
 
@@ -61,7 +62,9 @@ export default function CandidateList({
   }, [candidates, filters])
 
   const filteredIds = filtered.map((c) => c.id)
-  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id))
+  // Apenas candidatos com telefone podem ser selecionados para envio
+  const toggleableIds = filtered.filter((c) => c.hasPhone).map((c) => c.id)
+  const allSelected = toggleableIds.length > 0 && toggleableIds.every((id) => selectedIds.has(id))
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden border-r border-border bg-white">
@@ -74,26 +77,30 @@ export default function CandidateList({
           className="h-8 text-sm min-w-0 flex-1"
         />
         <Select
-          value={filters.stage || '__all__'}
-          onValueChange={(v) => onFiltersChange({ ...filters, stage: (v === '__all__' || !v) ? '' : v })}
+          value={filters.stage || undefined}
+          onValueChange={(v) => onFiltersChange({ ...filters, stage: v ?? '' })}
         >
-          <SelectTrigger className="h-8 text-sm w-40 shrink-0">
-            <SelectValue placeholder="Etapa" />
+          <SelectTrigger className="h-8 w-40 shrink-0">
+            <span className={cn('flex-1 truncate text-left text-sm', !filters.stage && 'text-muted-foreground')}>
+              {filters.stage || 'Todas as etapas'}
+            </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Todas as etapas</SelectItem>
+            <SelectItem value="">Todas as etapas</SelectItem>
             {stages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select
-          value={filters.city || '__all__'}
-          onValueChange={(v) => onFiltersChange({ ...filters, city: (v === '__all__' || !v) ? '' : v })}
+          value={filters.city || undefined}
+          onValueChange={(v) => onFiltersChange({ ...filters, city: v ?? '' })}
         >
-          <SelectTrigger className="h-8 text-sm w-40 shrink-0">
-            <SelectValue placeholder="Cidade" />
+          <SelectTrigger className="h-8 w-40 shrink-0">
+            <span className={cn('flex-1 truncate text-left text-sm', !filters.city && 'text-muted-foreground')}>
+              {filters.city || 'Todas as cidades'}
+            </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Todas as cidades</SelectItem>
+            <SelectItem value="">Todas as cidades</SelectItem>
             {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -112,7 +119,7 @@ export default function CandidateList({
                 <th className="w-11 px-4 py-2.5">
                   <Checkbox
                     checked={allSelected}
-                    onCheckedChange={() => onToggleAll(filteredIds)}
+                    onCheckedChange={() => onToggleAll(toggleableIds)}
                     aria-label="Selecionar todos"
                   />
                 </th>
@@ -133,29 +140,39 @@ export default function CandidateList({
             <tbody>
               {filtered.map((c) => {
                 const isSelected = selectedIds.has(c.id)
+                const canSelect  = c.hasPhone
                 return (
                   <tr
                     key={c.id}
-                    onClick={() => onToggle(c.id)}
+                    onClick={() => canSelect && onToggle(c.id)}
                     className={cn(
-                      'cursor-pointer border-b border-border transition-colors last:border-b-0',
+                      'border-b border-border transition-colors last:border-b-0',
+                      canSelect ? 'cursor-pointer' : 'cursor-default opacity-60',
                       isSelected
                         ? 'bg-red-50/60 hover:bg-red-50'
-                        : 'hover:bg-muted/30'
+                        : canSelect ? 'hover:bg-muted/30' : ''
                     )}
                   >
                     <td className="w-11 px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={() => onToggle(c.id)}
-                        aria-label={`Selecionar ${c.name}`}
+                        onCheckedChange={() => canSelect && onToggle(c.id)}
+                        disabled={!canSelect}
+                        aria-label={canSelect ? `Selecionar ${c.name}` : `${c.name} — sem telefone`}
                       />
                     </td>
                     <td className="px-3 py-3 text-[13px] font-semibold text-foreground">
-                      {c.name}
+                      <span>{c.name}</span>
+                      {c.phone ? (
+                        <span className="block text-[11px] font-normal text-muted-foreground/70 tabular-nums">
+                          {c.phone}
+                        </span>
+                      ) : (
+                        <span className="block text-[10px] font-normal text-muted-foreground/50">sem tel.</span>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-[13px] text-muted-foreground">
-                      {c.city}
+                      {c.city || <span className="text-muted-foreground/40">—</span>}
                     </td>
                     <td className="px-3 py-3">
                       <span className={cn(
@@ -167,6 +184,14 @@ export default function CandidateList({
                     </td>
                     <td className="px-3 py-3">
                       <StatusPill status={c.contactStatus} />
+                      {c.contactStatus === 'failed' && c.lastError && (
+                        <span
+                          className="block mt-0.5 text-[10px] text-red-600/80 leading-tight max-w-[160px] truncate"
+                          title={c.lastError}
+                        >
+                          {c.lastError}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 )

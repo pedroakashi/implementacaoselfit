@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { candidates } from '@/lib/store'
+import { prisma } from '@/lib/db'
+import type { Prisma } from '@prisma/client'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const vagaId = searchParams.get('vagaId')
-  const name = searchParams.get('name')?.toLowerCase()
-  const stage = searchParams.get('stage')
-  const city = searchParams.get('city')
+  const name   = searchParams.get('name')
+  const stage  = searchParams.get('stage')
+  const city   = searchParams.get('city')
 
-  let result = candidates
+  const where: Prisma.CandidateWhereInput = {}
+  if (vagaId) where.vagaId = vagaId
+  if (stage)  where.stage  = stage
+  if (city)   where.city   = city
+  if (name)   where.name   = { contains: name, mode: 'insensitive' }
 
-  if (vagaId) result = result.filter((c) => c.vagaId === vagaId)
-  if (name) result = result.filter((c) => c.name.toLowerCase().includes(name))
-  if (stage) result = result.filter((c) => c.stage === stage)
-  if (city) result = result.filter((c) => c.city === city)
+  const candidates = await prisma.candidate.findMany({
+    where,
+    orderBy: { createdAt: 'asc' },
+  })
 
-  return NextResponse.json(result)
+  return NextResponse.json(candidates)
 }
