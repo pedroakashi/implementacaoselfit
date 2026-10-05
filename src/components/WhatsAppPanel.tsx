@@ -164,13 +164,18 @@ export default function WhatsAppPanel({
   return (
     <div className="flex w-[320px] shrink-0 flex-col overflow-y-auto border-l border-border bg-white">
       {/* Header */}
-      <div className="shrink-0 border-b border-border px-5 py-4">
-        <p className="text-[13px] font-bold tracking-tight text-foreground">Envio WhatsApp</p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {selectedCount === 0
-            ? 'Selecione candidatos na lista'
-            : `${selectedCount} candidato${selectedCount !== 1 ? 's' : ''} selecionado${selectedCount !== 1 ? 's' : ''}`}
-        </p>
+      <div className="shrink-0 border-b border-border bg-white px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[18px] leading-none">💬</span>
+          <div>
+            <p className="text-[13px] font-bold tracking-tight text-foreground">Envio WhatsApp</p>
+            <p className="text-[11px] text-muted-foreground">
+              {selectedCount === 0
+                ? 'Selecione candidatos para enviar'
+                : `${selectedCount} candidato${selectedCount !== 1 ? 's' : ''} selecionado${selectedCount !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Body */}
@@ -304,20 +309,24 @@ export default function WhatsAppPanel({
               // Highlight context at "■"
               const [ctxBefore, ctxAfter] = ctx.split('■')
 
+              const isMapped = entry && !hasUnmappedVars([v], mapping, fillValues)
               return (
                 <div
                   key={v.key}
                   className={cn(
-                    'flex flex-col gap-1.5 rounded border p-2.5',
-                    entry && !hasUnmappedVars([v], mapping, fillValues)
-                      ? 'border-border'
-                      : 'border-red-200 bg-red-50/40'
+                    'flex flex-col gap-2 rounded-lg border p-3',
+                    isMapped
+                      ? 'border-border bg-white'
+                      : 'border-red-200 bg-red-50/30'
                   )}
                 >
                   {/* Context */}
-                  <span className="text-[11px] text-muted-foreground leading-snug">
+                  <span className="text-[11px] text-muted-foreground/80 leading-relaxed">
                     {ctxBefore}
-                    <span className="rounded bg-amber-100 px-1 font-bold text-amber-700">
+                    <span className={cn(
+                      'rounded px-1 py-0.5 text-[10px] font-bold',
+                      isMapped ? 'bg-primary/10 text-primary' : 'bg-red-100 text-red-600'
+                    )}>
                       {varLabel(v).split(' — ')[0]}
                     </span>
                     {ctxAfter}
@@ -326,8 +335,8 @@ export default function WhatsAppPanel({
                   {/* Field selector */}
                   <Select
                     value={
-                      entry?.type === 'field'       ? entry.value
-                      : entry?.type === 'fixed'     ? '__fixed__'
+                      entry?.type === 'field'          ? entry.value
+                      : entry?.type === 'fixed'        ? '__fixed__'
                       : entry?.type === 'fill_on_send' ? `__fos_${entry.fillType ?? 'text'}__`
                       : ''
                     }
@@ -344,14 +353,12 @@ export default function WhatsAppPanel({
                       }
                     }}
                   >
-                    <SelectTrigger className="h-7 text-[12px]">
+                    <SelectTrigger className="h-8 text-[12px]">
                       <SelectValue placeholder="Escolha o campo…" />
                     </SelectTrigger>
                     <SelectContent>
                       {CANDIDATE_FIELDS.map((f) => (
-                        <SelectItem key={f.value} value={f.value}>
-                          {f.label}
-                        </SelectItem>
+                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
                       ))}
                       <SelectItem value="__fixed__">Texto fixo…</SelectItem>
                       {FILL_ON_SEND_TYPES.map((ft) => (
@@ -362,23 +369,21 @@ export default function WhatsAppPanel({
                     </SelectContent>
                   </Select>
 
-                  {/* Texto fixo */}
                   {isFixed && (
                     <Input
-                      className="h-7 text-[12px]"
+                      className="h-8 text-[12px]"
                       placeholder="Texto fixo…"
                       value={entry.value}
                       onChange={(e) => setEntry(v.key, { type: 'fixed', value: e.target.value })}
                     />
                   )}
 
-                  {/* Preencher no envio */}
                   {isFillOnSend && (
                     <Input
-                      className="h-7 text-[12px]"
+                      className="h-8 text-[12px]"
                       type={entry.fillType === 'date' ? 'date' : entry.fillType === 'time' ? 'time' : entry.fillType === 'url' ? 'url' : 'text'}
                       placeholder={
-                        entry.fillType === 'url'  ? 'https://…'
+                        entry.fillType === 'url'    ? 'https://…'
                         : entry.fillType === 'date' ? 'dd/mm/aaaa'
                         : entry.fillType === 'time' ? 'hh:mm'
                         : 'Preencha aqui…'

@@ -13,6 +13,8 @@ interface Props {
   onSelect: (id: string) => void
   onRefreshVagas: () => void
   onSelectVaga: (id: string) => void
+  onDeleteVaga: (id: string) => Promise<void>
+  testPhone?: string | null
 }
 
 function SelfitLogo({ className }: { className?: string }) {
@@ -43,10 +45,12 @@ function SelfitLogo({ className }: { className?: string }) {
   )
 }
 
-export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, onSelectVaga }: Props) {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [resyncingId, setResyncingId] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, onSelectVaga, onDeleteVaga, testPhone }: Props) {
+  const [modalOpen, setModalOpen]           = useState(false)
+  const [resyncingId, setResyncingId]       = useState<string | null>(null)
+  const [deletingId, setDeletingId]         = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [isPending, startTransition]        = useTransition()
 
   function handleResync(e: React.MouseEvent, vaga: Vaga & { gupyJobId?: string | null }) {
     e.stopPropagation()
@@ -57,7 +61,7 @@ export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, o
         const result = await resyncVagaAction(vaga.gupyJobId!)
         const parts = [`${result.importados} novos`, `${result.atualizados} atualizados`]
         if (result.semTelefone)        parts.push(`${result.semTelefone} sem telefone`)
-        if (result.ignoradosPorStatus) parts.push(`${result.ignoradosPorStatus} ignorados por status`)
+        if (result.ignoradosPorStatus) parts.push(`${result.ignoradosPorStatus} ignorados`)
         toast.success(`"${vaga.title}" sincronizada — ${parts.join(', ')}`)
         onRefreshVagas()
       } catch (err) {
@@ -68,8 +72,26 @@ export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, o
     })
   }
 
+  async function handleDelete(e: React.MouseEvent, vagaId: string) {
+    e.stopPropagation()
+    if (confirmDeleteId !== vagaId) {
+      setConfirmDeleteId(vagaId)
+      return
+    }
+    setConfirmDeleteId(null)
+    setDeletingId(vagaId)
+    try {
+      await onDeleteVaga(vagaId)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
-    <aside className="flex flex-col w-64 flex-shrink-0 overflow-y-auto bg-sidebar border-r border-sidebar-border">
+    <aside
+      className="flex flex-col w-64 flex-shrink-0 overflow-y-auto bg-sidebar border-r border-sidebar-border"
+      onClick={() => setConfirmDeleteId(null)}
+    >
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
         <SelfitLogo className="h-7 w-auto" />
@@ -103,34 +125,65 @@ export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, o
         <nav className="flex flex-col gap-0.5">
           {vagas.map((v) => {
             const vagaWithGupy = v as Vaga & { gupyJobId?: string | null }
-            const isSyncing = resyncingId === v.id
+            const isSyncing   = resyncingId === v.id
+            const isDeleting  = deletingId === v.id
+            const isConfirming = confirmDeleteId === v.id
+            const isSelected  = selectedId === v.id
+
             return (
               <button
                 key={v.id}
-                onClick={() => onSelect(v.id)}
+                onClick={() => { setConfirmDeleteId(null); onSelect(v.id) }}
+                disabled={isDeleting}
                 className={cn(
                   'group flex flex-col w-full text-left px-3 py-2.5 rounded-md transition-colors duration-100 relative',
-                  selectedId === v.id
+                  isDeleting && 'opacity-40 pointer-events-none',
+                  isSelected
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-[60%] before:bg-primary before:rounded-r'
                     : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
                 )}
               >
                 <div className="flex items-center justify-between gap-1 min-w-0">
                   <span className="truncate text-[13px] font-medium leading-tight">{v.title}</span>
-                  {vagaWithGupy.gupyJobId && (
-                    <span
-                      role="button"
-                      onClick={(e) => handleResync(e, vagaWithGupy)}
-                      className={cn(
-                        'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors',
-                        isSyncing || isPending
-                          ? 'text-sidebar-foreground/30 cursor-default'
-                          : 'text-sidebar-foreground/30 hover:text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 cursor-pointer opacity-0 group-hover:opacity-100'
-                      )}
-                    >
-                      {isSyncing ? '...' : '↻'}
-                    </span>
-                  )}
+
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {/* Resync */}
+                    {vagaWithGupy.gupyJobId && (
+                      <span
+                        role="button"
+                        onClick={(e) => handleResync(e, vagaWithGupy)}
+                        title="Sincronizar com Gupy"
+                        className={cn(
+                          'rounded px-1 py-0.5 text-[10px] font-medium transition-colors',
+                          isSyncing || isPending
+                            ? 'text-sidebar-foreground/30 cursor-default'
+                            : 'text-sidebar-foreground/30 hover:text-sidebar-foreground/70 hover:bg-sidebar-foreground/10 cursor-pointer opacity-0 group-hover:opacity-100'
+                        )}
+                      >
+                        {isSyncing ? '…' : '↻'}
+                      </span>
+                    )}
+
+                    {/* Delete */}
+                    {isConfirming ? (
+                      <span
+                        role="button"
+                        onClick={(e) => handleDelete(e, v.id)}
+                        className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-600/80 text-white cursor-pointer"
+                      >
+                        Excluir?
+                      </span>
+                    ) : (
+                      <span
+                        role="button"
+                        onClick={(e) => handleDelete(e, v.id)}
+                        title="Remover vaga"
+                        className="rounded px-1 py-0.5 text-[11px] text-sidebar-foreground/20 hover:text-red-400 hover:bg-red-500/10 cursor-pointer opacity-0 group-hover:opacity-100 transition-colors"
+                      >
+                        ✕
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span className="text-[11px] mt-0.5 opacity-50">
                   {v.location} · {v.openings} vaga{v.openings !== 1 ? 's' : ''}
@@ -142,7 +195,15 @@ export default function Sidebar({ vagas, selectedId, onSelect, onRefreshVagas, o
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-sidebar-border">
+      <div className="px-4 py-3 border-t border-sidebar-border flex flex-col gap-1.5">
+        {testPhone && (
+          <div className="flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="text-[10px] text-sidebar-foreground/35 truncate">
+              Teste → {testPhone}
+            </span>
+          </div>
+        )}
         <p className="text-[11px] text-sidebar-foreground/20">Convoca v1.0 · Selfit</p>
       </div>
 

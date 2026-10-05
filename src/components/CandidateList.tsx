@@ -67,7 +67,7 @@ export default function CandidateList({
   const allSelected = toggleableIds.length > 0 && toggleableIds.every((id) => selectedIds.has(id))
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden border-r border-border bg-white">
+    <div className="flex flex-1 flex-col overflow-hidden border-r border-border bg-white/50">
       {/* Filters */}
       <div className="flex gap-2 px-4 py-3 border-b border-border bg-white shrink-0">
         <Input
@@ -146,14 +146,14 @@ export default function CandidateList({
                     key={c.id}
                     onClick={() => canSelect && onToggle(c.id)}
                     className={cn(
-                      'border-b border-border transition-colors last:border-b-0',
-                      canSelect ? 'cursor-pointer' : 'cursor-default opacity-60',
+                      'border-b border-border/60 transition-colors last:border-b-0',
+                      canSelect ? 'cursor-pointer' : 'cursor-default opacity-50',
                       isSelected
-                        ? 'bg-red-50/60 hover:bg-red-50'
-                        : canSelect ? 'hover:bg-muted/30' : ''
+                        ? 'bg-primary/5 hover:bg-primary/8'
+                        : canSelect ? 'hover:bg-muted/20' : ''
                     )}
                   >
-                    <td className="w-11 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="w-11 px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => canSelect && onToggle(c.id)}
@@ -161,32 +161,32 @@ export default function CandidateList({
                         aria-label={canSelect ? `Selecionar ${c.name}` : `${c.name} — sem telefone`}
                       />
                     </td>
-                    <td className="px-3 py-3 text-[13px] font-semibold text-foreground">
-                      <span>{c.name}</span>
+                    <td className="px-3 py-2.5">
+                      <span className="block text-[13px] font-medium text-foreground leading-snug">{c.name}</span>
                       {c.phone ? (
-                        <span className="block text-[11px] font-normal text-muted-foreground/70 tabular-nums">
+                        <span className="block text-[11px] text-muted-foreground/60 tabular-nums mt-0.5">
                           {c.phone}
                         </span>
                       ) : (
-                        <span className="block text-[10px] font-normal text-muted-foreground/50">sem tel.</span>
+                        <span className="block text-[10px] text-muted-foreground/40 mt-0.5">sem telefone</span>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-[13px] text-muted-foreground">
-                      {c.city || <span className="text-muted-foreground/40">—</span>}
+                    <td className="px-3 py-2.5 text-[12px] text-muted-foreground">
+                      {c.city || <span className="text-muted-foreground/30">—</span>}
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-2.5">
                       <span className={cn(
-                        'inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-semibold',
+                        'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
                         STAGE_COLORS[c.stage] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'
                       )}>
                         {c.stage}
                       </span>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-2.5">
                       <StatusPill status={c.contactStatus} />
                       {c.contactStatus === 'failed' && c.lastError && (
                         <span
-                          className="block mt-0.5 text-[10px] text-red-600/80 leading-tight max-w-[160px] truncate"
+                          className="block mt-0.5 text-[10px] text-red-500/70 leading-tight max-w-[150px] truncate"
                           title={c.lastError}
                         >
                           {c.lastError}

@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params
+  await prisma.$transaction([
+    prisma.messageRecord.deleteMany({ where: { candidate: { vagaId: id } } }),
+    prisma.candidate.deleteMany({ where: { vagaId: id } }),
+    prisma.vaga.delete({ where: { id } }),
+  ])
+  return new NextResponse(null, { status: 204 })
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }

@@ -144,9 +144,9 @@ export async function listJobs(params: {
 
 // addressCity não vem nos campos padrão da listagem — solicitar explicitamente
 const APPLICATION_FIELDS =
-  'id,jobId,status,currentStep.name,' +
+  'id,status,currentStep.name,' +
   'candidate.name,candidate.lastName,candidate.mobileNumber,candidate.addressCity,' +
-  'manualCandidate.name,manualCandidate.lastName,manualCandidate.mobileNumber,manualCandidate.addressCity'
+  'manualCandidate.name,manualCandidate.lastName,manualCandidate.mobileNumber'
 
 export async function listApplications(
   jobId: string | number,
